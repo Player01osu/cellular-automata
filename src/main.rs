@@ -5,24 +5,27 @@ use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 use sdl2::render::Canvas;
 use sdl2::video::Window;
-use std::ops::Index;
+use std::cell::RefCell;
+use std::fmt::Debug;
 use std::time::Duration;
 
-const FPS: u32 = 60;
-const WINDOW_WIDTH: u32 = 800;
-const WINDOW_HEIGHT: u32 = 600;
+const FPS: u32 = 10;
+const WINDOW_WIDTH: u32 = 1920;
+const WINDOW_HEIGHT: u32 = 1080;
 const WINDOW_TITLE: &'static str = "TEST";
+const BOARD_WIDTH: usize = 190;
+const BOARD_HEIGHT: usize = 40;
 
-pub struct Ctx {
+pub struct Ctx<T: CellState> {
     pub canvas: Canvas<Window>,
-    pub game: Game,
+    pub game: Game<T>,
 }
 
 #[allow(unused)]
 #[derive(Debug)]
-pub struct Game {
-    pub cells: Vec<Vec<Cell>>,
-    next_cells: Vec<Vec<Cell>>,
+pub struct Game<T: CellState> {
+    pub cells: Vec<Vec<Cell<T>>>,
+    next_cells: Vec<Vec<Cell<T>>>,
     width: usize,
     height: usize,
     rect_width: u32,
@@ -31,41 +34,174 @@ pub struct Game {
     gap_y: i32,
     offset_x: i32,
     offset_y: i32,
-    mode: Option<Mode>,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum Mode {
-    Place,
-    Destroy,
+    surround: RefCell<Vec<usize>>,
+    mode: Option<T>,
 }
 
 #[derive(Debug)]
-pub struct Cell {
-    pub state: CellState,
+pub struct Cell<T: CellState> {
+    pub state: T,
     pub rect: Rect,
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum CellState {
-    White = 0,
-    Gray = 1,
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Default)]
+pub enum Seeds {
+    #[default]
+    White,
+    Gray,
 }
 
-impl Index<usize> for CellState {
-    type Output = CellState;
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Default)]
+pub enum GOL {
+    #[default]
+    White,
+    Gray,
+}
 
-    fn index(&self, index: usize) -> &Self::Output {
-        match index {
-            0 => &CellState::White,
-            1 => &CellState::Gray,
-            _ => panic!("Out of bounds {index}"),
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Default)]
+pub enum BriansBrain {
+    #[default]
+    White,
+    Red,
+    Gray,
+}
+
+impl CellState for BriansBrain {
+    fn color(&self) -> Color {
+        match self {
+            Self::White => Color::WHITE,
+            Self::Gray => Color::GRAY,
+            Self::Red => Color::RED,
+        }
+    }
+
+    fn toggle(self) -> Self {
+        match self {
+            Self::White => Self::Gray,
+            Self::Gray => Self::Red,
+            Self::Red => Self::White,
+        }
+    }
+
+    fn num() -> usize {
+        3
+    }
+
+    fn transition(self, surround: &[usize]) -> Self {
+        match surround {
+            [_, _, 2, 0] => Self::Gray,
+            [_, _, _, 2] => Self::Red,
+            [_, _, _, 1] => Self::White,
+            _ => Self::White,
         }
     }
 }
 
-impl Game {
-    pub fn new(width: usize, height: usize) -> Game {
+impl From<usize> for BriansBrain {
+    fn from(n: usize) -> Self {
+        match n {
+            0 => Self::White,
+            1 => Self::Red,
+            2 => Self::Gray,
+            _ => panic!("Out of bounds {n}"),
+        }
+    }
+}
+
+impl CellState for Seeds {
+    fn color(&self) -> Color {
+        match self {
+            Self::White => Color::WHITE,
+            Self::Gray => Color::GRAY,
+        }
+    }
+
+    fn toggle(self) -> Self {
+        match self {
+            Self::White => Self::Gray,
+            Self::Gray => Self::White,
+        }
+    }
+
+    fn num() -> usize {
+        2
+    }
+
+    fn transition(self, surround: &[usize]) -> Self {
+        match surround {
+            [_, 2, _] => Self::Gray,
+            _ => Self::White,
+        }
+    }
+}
+
+impl From<usize> for Seeds {
+    fn from(n: usize) -> Self {
+        match n {
+            0 => Seeds::White,
+            1 => Seeds::Gray,
+            _ => panic!("Out of bounds {n}"),
+        }
+    }
+}
+
+impl CellState for GOL {
+    fn color(&self) -> Color {
+        match self {
+            GOL::White => Color::WHITE,
+            GOL::Gray => Color::GRAY,
+        }
+    }
+
+    fn toggle(self) -> Self {
+        match self {
+            GOL::White => GOL::Gray,
+            GOL::Gray => GOL::White,
+        }
+    }
+
+    fn num() -> usize {
+        2
+    }
+
+    fn transition(self, surround: &[usize]) -> Self {
+        // GOL
+        // Dead   Alive  Cur
+        // [6,    2,     1]
+        // [6,    3,     0]
+        // [5,    3,     1]
+        //
+        // Not allowed
+        // [4,    5,     0]
+        match surround {
+            [6, 2, 1] | [_, 3, _] => Self::Gray,
+            _ => Self::White,
+        }
+    }
+}
+
+impl From<usize> for GOL {
+    fn from(n: usize) -> Self {
+        match n {
+            0 => GOL::White,
+            1 => GOL::Gray,
+            _ => panic!("Out of bounds {n}"),
+        }
+    }
+}
+
+pub trait CellState: Debug + Clone + Copy + Eq + PartialEq + Default + From<usize> {
+    fn color(&self) -> Color;
+    fn toggle(self) -> Self;
+    fn num() -> usize;
+    fn transition(self, surround: &[usize]) -> Self;
+    fn place_mode(self) -> Self {
+        self.toggle()
+    }
+}
+
+impl<T: CellState> Game<T> {
+    pub fn new(width: usize, height: usize) -> Game<T> {
         const GAPSET: i32 = 0;
         const PAD: u32 = 100;
 
@@ -88,7 +224,7 @@ impl Game {
             .map(|i| {
                 (0..height)
                     .map(|j| Cell {
-                        state: CellState::White,
+                        state: T::default(),
                         rect: Rect::new(x(i), y(j), rect_width, rect_height),
                     })
                     .collect()
@@ -99,7 +235,7 @@ impl Game {
             .map(|i| {
                 (0..height)
                     .map(|j| Cell {
-                        state: CellState::White,
+                        state: T::default(),
                         rect: Rect::new(x(i), y(j), rect_width, rect_height),
                     })
                     .collect()
@@ -117,8 +253,20 @@ impl Game {
             gap_y,
             offset_x,
             offset_y,
+            surround: RefCell::new(vec![0; T::num() + 1]),
             mode: None,
         }
+    }
+
+    pub fn clear(&mut self) {
+        {
+            for (idx_x, i) in self.next_cells.iter().enumerate() {
+                for (idx_y, _) in i.iter().enumerate() {
+                    self.cells[idx_x][idx_y].state = T::default();
+                }
+            }
+        }
+        self.next_state();
     }
 
     pub fn toggle_state(&mut self, x: i32, y: i32) -> bool {
@@ -129,14 +277,8 @@ impl Game {
             .get_mut(idx_x as usize)
             .and_then(|i| {
                 i.get_mut(idx_y as usize).and_then(|cell| {
-                    let mode = self.mode.get_or_insert_with(|| match cell.state {
-                        CellState::White => Mode::Place,
-                        CellState::Gray => Mode::Destroy,
-                    });
-                    cell.rect.contains_point((x, y)).then(|| match mode {
-                        Mode::Place => cell.switch(CellState::Gray),
-                        Mode::Destroy => cell.switch(CellState::White),
-                    })
+                    let mode = self.mode.get_or_insert_with(|| cell.state.place_mode());
+                    cell.rect.contains_point((x, y)).then(|| cell.switch(*mode))
                 })
             })
             .is_some()
@@ -157,16 +299,7 @@ impl Game {
 
     pub fn next_state(&mut self) {
         for (idx_x, i) in self.cells.iter().enumerate() {
-            for (idx_y, _) in i.iter().enumerate() {
-                // Check
-                // * * *
-                // * o *
-                // * * *
-                // x - 1, y - 1
-                // x - 0, y - 1
-                // x + 1, y - 1
-                // ...
-
+            for (idx_y, cell) in i.iter().enumerate() {
                 // GOL
                 // Dead   Alive  Cur
                 // [6,    2,     1]
@@ -175,49 +308,48 @@ impl Game {
                 //
                 // Not allowed
                 // [4,    5,     0]
-
-                match self.get_surround(CellState::Gray, idx_x as isize, idx_y as isize) {
-                    [6, 2, 1] | [_, 3, _] => self.next_cells[idx_x][idx_y].state = CellState::Gray,
-                    _ => self.next_cells[idx_x][idx_y].state = CellState::White,
-                }
+                self.update_surround(idx_x as isize, idx_y as isize);
+                self.next_cells[idx_x][idx_y].state =
+                    cell.state.transition(&self.surround.borrow());
             }
         }
 
         self.cells.swap_with_slice(&mut self.next_cells);
     }
 
-    fn cell_is_state(&self, idx_x: isize, idx_y: isize, state: CellState) -> bool {
+    fn cell_is_state(&self, idx_x: isize, idx_y: isize, state: T) -> bool {
         self.cell(idx_x, idx_y)
             .and_then(|cell| cell.option_state(state))
             .is_some()
     }
 
-    fn get_surround(&self, state: CellState, idx_x: isize, idx_y: isize) -> [usize; 3] {
-        let mut surround = [0, 0, 0];
-
-        for i in 0..2 {
-            surround[i] += self.cell_is_state(idx_x - 1, idx_y - 1, state[i]) as usize;
-            surround[i] += self.cell_is_state(idx_x - 0, idx_y - 1, state[i]) as usize;
-            surround[i] += self.cell_is_state(idx_x + 1, idx_y - 1, state[i]) as usize;
-            surround[i] += self.cell_is_state(idx_x - 1, idx_y - 0, state[i]) as usize;
-            surround[i] += self.cell_is_state(idx_x + 1, idx_y - 0, state[i]) as usize;
-            surround[i] += self.cell_is_state(idx_x - 1, idx_y + 1, state[i]) as usize;
-            surround[i] += self.cell_is_state(idx_x - 0, idx_y + 1, state[i]) as usize;
-            surround[i] += self.cell_is_state(idx_x + 1, idx_y + 1, state[i]) as usize;
+    fn update_surround(&self, idx_x: isize, idx_y: isize) -> () {
+        let surround = &mut self.surround.borrow_mut();
+        for v in surround.iter_mut() {
+            *v = 0;
         }
 
-        surround[2] += self
-            .cell(idx_x + 0, idx_y + 0)
-            .and_then(|cell| cell.option_state(state[1]))
-            .is_some() as usize;
-        surround
+        for i in 0..T::num() {
+            surround[i] += self.cell_is_state(idx_x - 1, idx_y - 1, T::from(i)) as usize;
+            surround[i] += self.cell_is_state(idx_x - 0, idx_y - 1, T::from(i)) as usize;
+            surround[i] += self.cell_is_state(idx_x + 1, idx_y - 1, T::from(i)) as usize;
+            surround[i] += self.cell_is_state(idx_x - 1, idx_y - 0, T::from(i)) as usize;
+            surround[i] += self.cell_is_state(idx_x + 1, idx_y - 0, T::from(i)) as usize;
+            surround[i] += self.cell_is_state(idx_x - 1, idx_y + 1, T::from(i)) as usize;
+            surround[i] += self.cell_is_state(idx_x - 0, idx_y + 1, T::from(i)) as usize;
+            surround[i] += self.cell_is_state(idx_x + 1, idx_y + 1, T::from(i)) as usize;
+        }
+
+        surround[T::num()] += (1..T::num()).fold(0, |acc, n| {
+            acc + self.cell_is_state(idx_x + 0, idx_y + 0, T::from(n)) as usize * n
+        });
     }
 
-    fn cell(&self, idx_x: isize, idx_y: isize) -> Option<&Cell> {
+    fn cell(&self, idx_x: isize, idx_y: isize) -> Option<&Cell<T>> {
         let (idx_x, idx_y) = self.wrap_idx(idx_x, idx_y);
         self.cells
             .get(idx_x)
-            .and_then(|i: &Vec<Cell>| i.get(idx_y).and_then(|cell| Some(cell)))
+            .and_then(|i: &Vec<Cell<T>>| i.get(idx_y).and_then(|cell| Some(cell)))
     }
 
     fn wrap_idx(&self, idx_x: isize, idx_y: isize) -> (usize, usize) {
@@ -240,8 +372,8 @@ impl Game {
     }
 }
 
-impl Cell {
-    pub fn option_state(&self, state: CellState) -> Option<()> {
+impl<T: CellState> Cell<T> {
+    pub fn option_state(&self, state: T) -> Option<()> {
         (self.state == state).then_some(())
     }
 
@@ -249,7 +381,7 @@ impl Cell {
         self.state.color()
     }
 
-    pub fn switch(&mut self, state: CellState) {
+    pub fn switch(&mut self, state: T) {
         self.state = state;
     }
 
@@ -257,28 +389,12 @@ impl Cell {
         self.state = self.state.toggle()
     }
 
-    pub fn is_state(&self, state: CellState) -> bool {
+    pub fn is_state(&self, state: T) -> bool {
         self.state.eq(&state)
     }
 }
 
-impl CellState {
-    pub fn color(&self) -> Color {
-        match self {
-            CellState::White => Color::WHITE,
-            CellState::Gray => Color::GRAY,
-        }
-    }
-
-    pub fn toggle(self) -> Self {
-        match self {
-            CellState::White => CellState::Gray,
-            CellState::Gray => CellState::White,
-        }
-    }
-}
-
-pub fn draw_grid(ctx: &mut Ctx) {
+pub fn draw_grid<T: CellState>(ctx: &mut Ctx<T>) {
     let cells = &ctx.game.cells;
     for i in cells {
         for cell in i {
@@ -301,7 +417,7 @@ fn main() {
     let canvas = window.into_canvas().build().unwrap();
     let mut ctx = Ctx {
         canvas,
-        game: Game::new(20, 20),
+        game: Game::<GOL>::new(BOARD_WIDTH, BOARD_HEIGHT),
     };
 
     let mut event_pump = sdl_context.event_pump().unwrap();
@@ -332,6 +448,12 @@ fn main() {
                     ..
                 } => {
                     ctx.game.next_state();
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::C),
+                    ..
+                } => {
+                    ctx.game.clear();
                 }
                 _ => {}
             }
