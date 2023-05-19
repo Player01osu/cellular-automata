@@ -281,33 +281,7 @@ impl<T: CellState> Cell<T> {
     }
 }
 
-struct CanvasPtr<T: RenderTarget> {
-    canvas: *const Canvas<T>,
-}
-
-unsafe impl<T: RenderTarget> Send for CanvasPtr<T> { }
-unsafe impl<T: RenderTarget> Sync for CanvasPtr<T> { }
-
 pub fn draw_grid<T: CellState + Send + Sync + 'static>(ctx: &mut Ctx<T>) {
-    //for t in 0..num_cpus::get() {
-    //    let ptr = GamePtr { game: &ctx.game };
-    //    let threads = unsafe { core::slice::from_raw_parts_mut(ctx.draw_threads.as_mut_ptr(), num_cpus::get()) };
-    //    let cells = unsafe {&(*ptr.game).cells};
-    //    let canvas_ptr: CanvasPtr<Window> = CanvasPtr { canvas: &ctx.canvas };
-    //    threads[t] = Some(thread::spawn(move || unsafe {
-    //        let canvas_ptr = canvas_ptr;
-    //        let canvas = &mut (*canvas_ptr.canvas.cast_mut());
-
-    //        for idx_x in (0..cells.len()).step_by(num_cpus::get()) {
-    //            for idx_y in 0..cells[0].len() {
-    //                let cell = &cells[idx_x][idx_y];
-    //                canvas.set_draw_color(cell.color());
-    //                canvas.fill_rect(cell.rect).unwrap();
-    //            }
-    //        }
-    //    }));
-    //}
-
     let cells = &ctx.game.cells;
     for i in cells {
         for cell in i {
