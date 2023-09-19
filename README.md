@@ -4,13 +4,14 @@
 Cellular automata written in rust using SDL2!
 
 
-https://github.com/Player01osu/cellular-automata/assets/85573610/654f86cb-f8bd-46d6-8015-917d099d69d5
+
+https://github.com/Player01osu/cellular-automata/assets/85573610/8f017f65-2d8b-4a09-b98e-ff0211d62057
 
 
 
-https://github.com/Player01osu/cellular-automata/assets/85573610/50fbbb46-f2f5-444a-bc88-db757bd39389
+https://github.com/Player01osu/cellular-automata/assets/85573610/0dd5fdc4-1507-49ee-b00d-de3dfd149ad9
 
 
 
-https://github.com/Player01osu/cellular-automata/assets/85573610/8cb0fdcc-250f-4d44-8cbb-b04bd78fcab1
+https://github.com/Player01osu/cellular-automata/assets/85573610/442faac9-d8ae-4d6c-86df-4fc8834bcd31
 
