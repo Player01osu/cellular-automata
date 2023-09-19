@@ -15,3 +15,7 @@ https://github.com/Player01osu/cellular-automata/assets/85573610/0dd5fdc4-1507-4
 
 https://github.com/Player01osu/cellular-automata/assets/85573610/442faac9-d8ae-4d6c-86df-4fc8834bcd31
 
+
+
+https://github.com/Player01osu/cellular-automata/assets/85573610/bd12c0fd-f906-4ab6-a315-0633b27bdbe3
+
